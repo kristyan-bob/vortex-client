@@ -30,23 +30,23 @@ export default function App() {
         <div className="brand-block">
           <div className="brand-badge">V</div>
           <div>
-            <p className="eyebrow">Utility client</p>
+            <p className="eyebrow">Companion client</p>
             <h1>PlayVortex</h1>
           </div>
         </div>
 
         <nav className="nav">
           <button className="nav-item active">Dashboard</button>
+          <button className="nav-item">Games</button>
           <button className="nav-item">Profiles</button>
-          <button className="nav-item">Overlay</button>
-          <button className="nav-item">Logs</button>
+          <button className="nav-item">Studio</button>
         </nav>
       </aside>
 
       <main className="main-panel">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Companion client</p>
+            <p className="eyebrow">PlayVortex launcher</p>
             <h2>Performance and setup dashboard</h2>
           </div>
           <button className="primary-btn">Launch PlayVortex</button>
@@ -71,7 +71,7 @@ export default function App() {
           <div className="stat-card">
             <span>System status</span>
             <strong>Stable</strong>
-            <small>Low load detected</small>
+            <small>Ready for PlayVortex</small>
           </div>
         </section>
 
@@ -119,6 +119,10 @@ export default function App() {
             </div>
             <div className="toggle-row">
               <span>Overlay enabled</span>
+              <button className="toggle on">On</button>
+            </div>
+            <div className="toggle-row">
+              <span>Quick join</span>
               <button className="toggle on">On</button>
             </div>
           </div>
