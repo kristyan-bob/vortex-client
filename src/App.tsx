@@ -1,240 +1,165 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 
-type Profile = {
-  id: number
-  name: string
-  mode: string
-  fps: number
-  latency: number
-  color: string
-}
-
-type CompanionStatus = {
-  installed: boolean
-  running: boolean
-  path: string
-  os: string
-}
-
-type ToggleKey = 'boost' | 'overlay' | 'quickJoin'
+type CompanionStatus = { installed: boolean; running: boolean; path: string; os: string }
+type Profile = { id: string; name: string; description: string }
+type Preferences = { profile: string; path: string }
 
 const profiles: Profile[] = [
-  { id: 1, name: 'Competitive', mode: 'High FPS', fps: 144, latency: 22, color: '#6ee7b7' },
-  { id: 2, name: 'Balanced', mode: 'Smooth gameplay', fps: 120, latency: 36, color: '#60a5fa' },
-  { id: 3, name: 'Streaming', mode: 'Capture ready', fps: 60, latency: 54, color: '#fbbf24' }
+  { id: 'competitive', name: 'Competitive', description: 'Responsiveness-focused preference' },
+  { id: 'balanced', name: 'Balanced', description: 'Everyday preference' },
+  { id: 'streaming', name: 'Streaming', description: 'Streaming workflow preference' }
 ]
+const STORAGE_KEY = 'playvortex-companion-preferences-v1'
+
+function readPreferences(): Preferences {
+  try {
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as Partial<Preferences>
+    return {
+      profile: profiles.some((profile) => profile.id === stored.profile) ? stored.profile! : 'balanced',
+      path: typeof stored.path === 'string' ? stored.path : ''
+    }
+  } catch {
+    return { profile: 'balanced', path: '' }
+  }
+}
 
 export default function App() {
-  const [activeProfile, setActiveProfile] = useState<number>(2)
+  const [preferences, setPreferences] = useState<Preferences>(readPreferences)
   const [status, setStatus] = useState<CompanionStatus | null>(null)
-  const [customPath, setCustomPath] = useState<string>('C:/Games/PlayVortex/PlayVortex.exe')
-  const [loading, setLoading] = useState(true)
+  const [checking, setChecking] = useState(true)
   const [launching, setLaunching] = useState(false)
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
-  const [toggles, setToggles] = useState<Record<ToggleKey, boolean>>({
-    boost: true,
-    overlay: true,
-    quickJoin: true
-  })
+  const [notice, setNotice] = useState<{ kind: 'success' | 'error' | 'info'; text: string } | null>(null)
+  const [lastChecked, setLastChecked] = useState<Date | null>(null)
 
-  const active = useMemo(
-    () => profiles.find((profile) => profile.id === activeProfile) ?? profiles[1],
-    [activeProfile]
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.id === preferences.profile) ?? profiles[1],
+    [preferences.profile]
   )
 
-  const refreshStatus = async () => {
-    setLoading(true)
+  const refreshStatus = useCallback(async (quiet = false) => {
+    if (!quiet) setChecking(true)
     try {
-      const current = await invoke<CompanionStatus>('get_vortex_status')
-      setStatus(current)
-      if (current.path) {
-        setCustomPath(current.path)
-      }
-      setMessage(null)
+      const result = await invoke<CompanionStatus>('get_vortex_status')
+      setStatus(result)
+      setLastChecked(new Date())
+      setPreferences((current) => current.path ? current : { ...current, path: result.path })
+      setNotice((current) => current?.kind === 'error' ? null : current)
     } catch (error) {
-      setMessage({ type: 'error', text: String(error) })
+      setNotice({ kind: 'error', text: `Could not check Vortex status: ${String(error)}` })
     } finally {
-      setLoading(false)
+      setChecking(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     void refreshStatus()
-    const timer = window.setInterval(() => {
-      void refreshStatus()
-    }, 5000)
-
+    const timer = window.setInterval(() => void refreshStatus(true), 10000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [refreshStatus])
+
+  const savePreferences = () => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
+      setNotice({ kind: 'success', text: 'Profile and executable path saved on this computer.' })
+    } catch (error) {
+      setNotice({ kind: 'error', text: `Could not save preferences: ${String(error)}` })
+    }
+  }
 
   const launchVortex = async () => {
-    const targetPath = customPath.trim() || status?.path || ''
-
-    if (!targetPath) {
-      setMessage({ type: 'error', text: 'No Vortex path is available yet. Try refreshing status first.' })
+    const path = preferences.path.trim()
+    if (!path) {
+      setNotice({ kind: 'error', text: 'Enter the full path to Vortex.exe before launching.' })
       return
     }
-
     setLaunching(true)
-    setMessage({ type: 'info', text: 'Launching Vortex…' })
-
+    setNotice({ kind: 'info', text: 'Starting Vortex…' })
     try {
-      await invoke('launch_vortex', { path: targetPath })
-      setMessage({ type: 'success', text: `Vortex launched from ${targetPath}` })
-      window.setTimeout(() => void refreshStatus(), 1500)
+      await invoke('launch_vortex', { path })
+      setNotice({ kind: 'success', text: 'Vortex launch was requested successfully.' })
+      window.setTimeout(() => void refreshStatus(true), 1500)
     } catch (error) {
-      setMessage({ type: 'error', text: String(error) })
+      setNotice({ kind: 'error', text: String(error) })
     } finally {
       setLaunching(false)
     }
   }
 
-  const toggleFeature = (key: ToggleKey) => {
-    setToggles((previous) => ({ ...previous, [key]: !previous[key] }))
-  }
-
-  const systemStatus = status?.running ? 'Running' : status?.installed ? 'Ready' : 'Not installed'
+  const statusLabel = checking && !status ? 'Checking…' : status?.running ? 'Running' : status?.installed ? 'Installed' : 'Not detected'
+  const statusTone = status?.running ? 'live' : status?.installed ? 'ready' : 'missing'
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-badge">V</div>
-          <div>
-            <p className="eyebrow">Companion client</p>
-            <h1>PlayVortex</h1>
-          </div>
+          <div><p className="eyebrow">Desktop companion</p><h1>PlayVortex</h1></div>
         </div>
-
-        <nav className="nav" aria-label="Main navigation">
-          <button className="nav-item active" type="button">Dashboard</button>
-          <button className="nav-item" type="button">Games</button>
-          <button className="nav-item" type="button">Profiles</button>
-          <button className="nav-item" type="button">Studio</button>
-        </nav>
-
-        <div className="sidebar-panel">
-          <span className="status-dot" aria-hidden="true" />
-          <div>
-            <small>System status</small>
-            <strong>{systemStatus}</strong>
-          </div>
+        <div className="sidebar-divider" />
+        <div className="sidebar-status">
+          <span className={`status-indicator ${statusTone}`} />
+          <div><small>Vortex status</small><strong>{statusLabel}</strong></div>
+        </div>
+        <div className="sidebar-footer">
+          <span>Preferences are saved locally.</span>
+          <span>Performance and overlay controls are not provided by this companion yet.</span>
         </div>
       </aside>
 
       <main className="main-panel">
         <header className="topbar">
-          <div>
-            <p className="eyebrow">PlayVortex launcher</p>
-            <h2>Performance and setup dashboard</h2>
-          </div>
+          <div><p className="eyebrow">OVERVIEW</p><h2>Your launcher dashboard</h2><p className="subtitle">Check Vortex and launch it from one place.</p></div>
           <div className="topbar-actions">
-            <button className="ghost-btn" type="button" onClick={() => void refreshStatus()} disabled={loading}>
-              {loading ? 'Checking…' : 'Refresh'}
-            </button>
-            <button className="primary-btn" type="button" onClick={() => void launchVortex()} disabled={loading || launching || !customPath.trim()}>
-              {launching ? 'Launching…' : status?.running ? 'Vortex is running' : 'Launch PlayVortex'}
-            </button>
+            <button className="ghost-btn" type="button" onClick={() => void refreshStatus()} disabled={checking}>{checking ? 'Checking…' : 'Refresh status'}</button>
+            <button className="primary-btn" type="button" onClick={() => void launchVortex()} disabled={launching}>{launching ? 'Launching…' : 'Launch Vortex'}</button>
           </div>
         </header>
 
-        {message && <div className={`notice ${message.type}`}>{message.text}</div>}
+        {notice && <div className={`notice ${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>{notice.text}</div>}
 
-        <section className="stats-grid">
-          <div className="stat-card accent">
-            <span>Current profile</span>
-            <strong>{active.name}</strong>
-            <small>{active.mode}</small>
+        <section className="status-banner">
+          <div>
+            <span className="eyebrow">VORTEX APPLICATION</span>
+            <h3>{statusLabel}</h3>
+            <p>{status?.path || 'No install was detected automatically. Enter the executable path below.'}</p>
           </div>
-          <div className="stat-card">
-            <span>FPS target</span>
-            <strong>{active.fps}</strong>
-            <small>Frames per second</small>
-          </div>
-          <div className="stat-card">
-            <span>Latency</span>
-            <strong>{active.latency} ms</strong>
-            <small>Network + system load</small>
-          </div>
-          <div className="stat-card">
-            <span>System status</span>
-            <strong>{systemStatus}</strong>
-            <small>{status?.os ? `Detected on ${status.os}` : 'Checking system…'}</small>
-          </div>
+          <div className={`status-pill ${statusTone}`}><span className={`status-indicator ${statusTone}`} />{statusLabel}</div>
         </section>
 
         <section className="content-grid">
           <div className="panel">
-            <div className="panel-header">
-              <h3>Profiles</h3>
-            </div>
-
+            <div className="panel-header"><div><p className="eyebrow">PERSONALIZE</p><h3>Launch profile</h3></div></div>
+            <p className="panel-description">Select and save a workflow preference. This does not modify game settings.</p>
             <div className="profile-list">
               {profiles.map((profile) => (
-                <button
-                  key={profile.id}
-                  type="button"
-                  className={`profile-card ${activeProfile === profile.id ? 'selected' : ''}`}
-                  onClick={() => setActiveProfile(profile.id)}
-                >
-                  <div className="dot" style={{ background: profile.color }} />
-                  <div>
-                    <strong>{profile.name}</strong>
-                    <small>{profile.mode}</small>
-                  </div>
-                  <span>{profile.fps} FPS</span>
+                <button key={profile.id} type="button" className={`profile-card ${preferences.profile === profile.id ? 'selected' : ''}`} onClick={() => setPreferences((current) => ({ ...current, profile: profile.id }))} aria-pressed={preferences.profile === profile.id}>
+                  <span className={`profile-radio ${preferences.profile === profile.id ? 'checked' : ''}`} />
+                  <span className="profile-copy"><strong>{profile.name}</strong><small>{profile.description}</small></span>
+                  <span className="profile-choice">{preferences.profile === profile.id ? 'Selected' : 'Choose'}</span>
                 </button>
               ))}
             </div>
+            <div className="selected-profile"><span>Current preference</span><strong>{selectedProfile.name}</strong></div>
           </div>
 
           <div className="panel">
-            <div className="panel-header">
-              <h3>Launch settings</h3>
+            <div className="panel-header"><div><p className="eyebrow">SETUP</p><h3>Executable path</h3></div></div>
+            <p className="panel-description">Enter the full path to Vortex.exe. A custom installation path works even when automatic detection does not.</p>
+            <label className="field-label" htmlFor="vortex-path">Vortex executable</label>
+            <input id="vortex-path" className="field-input" value={preferences.path} onChange={(event) => setPreferences((current) => ({ ...current, path: event.target.value }))} placeholder={'C:\\Program Files\\Vortex\\Vortex.exe'} spellCheck={false} />
+            <div className="path-hint">Tip: In File Explorer, Shift + right-click Vortex.exe and select “Copy as path”.</div>
+            <div className="settings-actions">
+              <button className="ghost-btn" type="button" onClick={savePreferences}>Save preferences</button>
+              <button className="primary-btn" type="button" onClick={() => void launchVortex()} disabled={launching}>{launching ? 'Launching…' : 'Launch from this path'}</button>
             </div>
-
-            <label className="field-label" htmlFor="game-path">Game path</label>
-            <input
-              id="game-path"
-              className="field-input"
-              value={customPath}
-              onChange={(event) => setCustomPath(event.target.value)}
-              placeholder="C:/Games/PlayVortex/PlayVortex.exe"
-            />
-
-            <div className="toggle-row">
-              <span>Performance boost</span>
-              <button
-                type="button"
-                className={`toggle ${toggles.boost ? 'on' : 'off'}`}
-                onClick={() => toggleFeature('boost')}
-              >
-                {toggles.boost ? 'On' : 'Off'}
-              </button>
-            </div>
-            <div className="toggle-row">
-              <span>Overlay enabled</span>
-              <button
-                type="button"
-                className={`toggle ${toggles.overlay ? 'on' : 'off'}`}
-                onClick={() => toggleFeature('overlay')}
-              >
-                {toggles.overlay ? 'On' : 'Off'}
-              </button>
-            </div>
-            <div className="toggle-row">
-              <span>Quick join</span>
-              <button
-                type="button"
-                className={`toggle ${toggles.quickJoin ? 'on' : 'off'}`}
-                onClick={() => toggleFeature('quickJoin')}
-              >
-                {toggles.quickJoin ? 'On' : 'Off'}
-              </button>
+            <div className="details-list">
+              <div><span>Operating system</span><strong>{status?.os ?? '—'}</strong></div>
+              <div><span>Last checked</span><strong>{lastChecked?.toLocaleTimeString() ?? '—'}</strong></div>
             </div>
           </div>
         </section>
+        <footer className="app-footer">Status checks refresh every 10 seconds. FPS and latency are not measured by this app.</footer>
       </main>
     </div>
   )
