@@ -127,39 +127,39 @@ export default function App() {
           <div className={`status-pill ${statusTone}`}><span className={`status-indicator ${statusTone}`} />{statusLabel}</div>
         </section>
 
-        <section className="content-grid">
-          <div className="panel">
-            <div className="panel-header"><div><p className="eyebrow">PERSONALIZE</p><h3>Launch profile</h3></div></div>
-            <p className="panel-description">Select and save a workflow preference. This does not modify game settings.</p>
-            <div className="profile-list">
+        <section className=\"content-grid\">
+          <div className=\"panel\">
+            <div className=\"panel-header\"><div><p className=\"eyebrow\">PERSONALIZE</p><h3>Launch profile</h3></div></div>
+            <p className=\"panel-description\">Select and save a workflow preference. This does not modify game settings.</p>
+            <div className=\"profile-list\">
               {profiles.map((profile) => (
-                <button key={profile.id} type="button" className={`profile-card ${preferences.profile === profile.id ? 'selected' : ''}`} onClick={() => setPreferences((current) => ({ ...current, profile: profile.id }))} aria-pressed={preferences.profile === profile.id}>
+                <button key={profile.id} type=\"button\" className={`profile-card ${preferences.profile === profile.id ? 'selected' : ''}`} onClick={() => setPreferences((current) => ({ ...current, profile: profile.id }))} aria-pressed={preferences.profile === profile.id}>
                   <span className={`profile-radio ${preferences.profile === profile.id ? 'checked' : ''}`} />
-                  <span className="profile-copy"><strong>{profile.name}</strong><small>{profile.description}</small></span>
-                  <span className="profile-choice">{preferences.profile === profile.id ? 'Selected' : 'Choose'}</span>
+                  <span className=\"profile-copy\"><strong>{profile.name}</strong><small>{profile.description}</small></span>
+                  <span className=\"profile-choice\">{preferences.profile === profile.id ? 'Selected' : 'Choose'}</span>
                 </button>
               ))}
             </div>
-            <div className="selected-profile"><span>Current preference</span><strong>{selectedProfile.name}</strong></div>
+            <div className=\"selected-profile\"><span>Current preference</span><strong>{selectedProfile.name}</strong></div>
           </div>
 
-          <div className="panel">
-            <div className="panel-header"><div><p className="eyebrow">SETUP</p><h3>Executable path</h3></div></div>
-            <p className="panel-description">Enter the full path to Vortex.exe. A custom installation path works even when automatic detection does not.</p>
-            <label className="field-label" htmlFor="vortex-path">Vortex executable</label>
-            <input id="vortex-path" className="field-input" value={preferences.path} onChange={(event) => setPreferences((current) => ({ ...current, path: event.target.value }))} placeholder={'C:\\Program Files\\Vortex\\Vortex.exe'} spellCheck={false} />
-            <div className="path-hint">Tip: In File Explorer, Shift + right-click Vortex.exe and select “Copy as path”.</div>
-            <div className="settings-actions">
-              <button className="ghost-btn" type="button" onClick={savePreferences}>Save preferences</button>
-              <button className="primary-btn" type="button" onClick={() => void launchVortex()} disabled={launching}>{launching ? 'Launching…' : 'Launch from this path'}</button>
+          <div className=\"panel\">
+            <div className=\"panel-header\"><div><p className=\"eyebrow\">SETUP</p><h3>Executable path</h3></div></div>
+            <p className=\"panel-description\">Enter the full path to Vortex.exe. A custom installation path works even when automatic detection does not.</p>
+            <label className=\"field-label\" htmlFor=\"vortex-path\">Vortex executable</label>
+            <input id=\"vortex-path\" className=\"field-input\" value={preferences.path} onChange={(event) => setPreferences((current) => ({ ...current, path: event.target.value }))} placeholder={'C:\\\\Program Files\\\\Vortex\\\\Vortex.exe'} spellCheck={false} />
+            <div className=\"path-hint\">Tip: In File Explorer, Shift + right-click Vortex.exe and select “Copy as path”.</div>
+            <div className=\"settings-actions\">
+              <button className=\"ghost-btn\" type=\"button\" onClick={savePreferences}>Save preferences</button>
+              <button className=\"primary-btn\" type=\"button\" onClick={() => void launchVortex()} disabled={launching}>{launching ? 'Launching…' : 'Launch from this path'}</button>
             </div>
-            <div className="details-list">
+            <div className=\"details-list\">
               <div><span>Operating system</span><strong>{status?.os ?? '—'}</strong></div>
               <div><span>Last checked</span><strong>{lastChecked?.toLocaleTimeString() ?? '—'}</strong></div>
             </div>
           </div>
         </section>
-        <footer className="app-footer">Status checks refresh every 10 seconds. FPS and latency are not measured by this app.</footer>
+        <footer className=\"app-footer\">Status checks refresh every 10 seconds. FPS and latency are not measured by this app.</footer>
       </main>
     </div>
   )
