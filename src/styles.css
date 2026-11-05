@@ -69,3 +69,34 @@ button:disabled { cursor: not-allowed; opacity: .65; }
 .path-hint { margin: 10px 0 0; color: #8b9ab2; font-size: 10px; line-height: 1.55; }
 .app-footer { margin-top: 14px; color: #7f8da5; font-size: 10px; }
 @media (max-width: 980px) { .app-shell { grid-template-columns: 1fr; } .sidebar { min-height: auto; padding: 15px 20px; border-right: 0; border-bottom: 1px solid rgba(148, 163, 184, .15); } .sidebar-divider { margin: 12px 0; } .sidebar-footer { margin-top: 12px; } .performance-grid { grid-template-columns: 1fr; } .topbar { align-items: flex-start; flex-direction: column; } }
+.goal-panel { margin-bottom: 16px; padding: 18px 20px; }
+.goal-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.goal-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 66px;
+  padding: 12px;
+  border: 1px solid #30394b;
+  border-radius: 10px;
+  color: #e8edf8;
+  text-align: left;
+  background: #111725;
+}
+.goal-option:hover { border-color: #7084ff; }
+.goal-option.selected {
+  border-color: #8b9bff;
+  background: #1b2340;
+  box-shadow: inset 0 0 0 1px #8b9bff55, 0 0 16px #6179e822;
+}
+.goal-option .profile-radio { flex: 0 0 15px; }
+.goal-option .profile-copy { flex: 1; }
+.goal-option .profile-copy strong,
+.goal-option .profile-copy small { display: block; }
+.goal-option .profile-copy strong { font-size: 12px; }
+.goal-option .profile-copy small { margin-top: 3px; color: #aab6cb; font-size: 10px; }
+.goal-disclaimer { margin: 12px 0 0; color: #aab6cb; font-size: 11px; }
+.goal-disclaimer strong { color: #c4b5fd; }
+@media (max-width: 760px) {
+  .goal-list { grid-template-columns: 1fr; }
+}
