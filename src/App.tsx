@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 
 type CompanionStatus = { installed: boolean; running: boolean; path: string; os: string }
 type Notice = { kind: 'success' | 'error' | 'info'; text: string }
 type Goal = 'fps' | 'balanced' | 'visuals'
+type Point = { x: number; y: number }
 
 const STORAGE_KEY = 'playvortex-executable-path'
 const GOAL_KEY = 'playvortex-performance-goal'
+const SIDEBAR_POSITION_KEY = 'playvortex-sidebar-position'
+const SIDEBAR_COLLAPSED_KEY = 'playvortex-sidebar-collapsed'
 const DEFAULT_PATH = String.raw`C:\Users\kslal\Downloads\Vortex-Windows (4)\Vortex\Vortex.exe`
 const goals: { id: Goal; title: string; description: string }[] = [
   { id: 'fps', title: 'Higher FPS', description: 'Favor smoother frame rates' },
@@ -18,12 +21,23 @@ function loadStoredValue(key: string, fallback: string) {
   try { return localStorage.getItem(key) || fallback } catch { return fallback }
 }
 
+function loadSidebarPosition(): Point {
+  try {
+    const value = JSON.parse(localStorage.getItem(SIDEBAR_POSITION_KEY) || 'null') as Point | null
+    if (value && Number.isFinite(value.x) && Number.isFinite(value.y)) return value
+  } catch { /* use the default position */ }
+  return { x: 18, y: 18 }
+}
+
 export default function App() {
   const [path, setPath] = useState(() => loadStoredValue(STORAGE_KEY, DEFAULT_PATH))
   const [goal, setGoal] = useState<Goal>(() => {
     const saved = loadStoredValue(GOAL_KEY, 'fps')
     return goals.some((item) => item.id === saved) ? saved as Goal : 'fps'
   })
+  const [sidebarPosition, setSidebarPosition] = useState<Point>(loadSidebarPosition)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadStoredValue(SIDEBAR_COLLAPSED_KEY, 'false') === 'true')
+  const dragOffset = useRef<Point | null>(null)
   const [status, setStatus] = useState<CompanionStatus | null>(null)
   const [checking, setChecking] = useState(true)
   const [launching, setLaunching] = useState(false)
@@ -48,6 +62,37 @@ export default function App() {
     const timer = window.setInterval(() => void refreshStatus(), 10000)
     return () => window.clearInterval(timer)
   }, [refreshStatus])
+
+  useEffect(() => {
+    try { localStorage.setItem(SIDEBAR_POSITION_KEY, JSON.stringify(sidebarPosition)) } catch { /* position remains for this session */ }
+  }, [sidebarPosition])
+
+  const moveSidebar = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (!dragOffset.current) return
+    const width = sidebarCollapsed ? 76 : 248
+    const height = sidebarCollapsed ? 190 : 320
+    const next = {
+      x: Math.max(8, Math.min(window.innerWidth - width - 8, event.clientX - dragOffset.current.x)),
+      y: Math.max(8, Math.min(window.innerHeight - Math.min(height, window.innerHeight - 16) - 8, event.clientY - dragOffset.current.y))
+    }
+    setSidebarPosition(next)
+  }
+
+  const startSidebarDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if ((event.target as HTMLElement).closest('button[data-no-drag="true"]')) return
+    dragOffset.current = { x: event.clientX - sidebarPosition.x, y: event.clientY - sidebarPosition.y }
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const stopSidebarDrag = () => { dragOffset.current = null }
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current
+      try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next)) } catch { /* session state still updates */ }
+      return next
+    })
+  }
 
   const selectGoal = (nextGoal: Goal) => {
     setGoal(nextGoal)
@@ -99,17 +144,62 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand-block">
-          <div className="brand-badge">V</div>
-          <div><p className="eyebrow">Desktop companion</p><h1>PlayVortex</h1></div>
+      <aside
+        className={`sidebar draggable-sidebar ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
+        style={{ left: sidebarPosition.x, top: sidebarPosition.y }}
+        aria-label="Draggable PlayVortex sidebar"
+      >
+        <div className="sidebar-drag-row">
+          <button
+            className="sidebar-drag-handle"
+            type="button"
+            aria-label="Drag sidebar to move it. Use arrow keys to reposition."
+            title="Drag to move sidebar"
+            onPointerDown={startSidebarDrag}
+            onPointerMove={moveSidebar}
+            onPointerUp={stopSidebarDrag}
+            onPointerCancel={stopSidebarDrag}
+            onKeyDown={(event) => {
+              const step = event.shiftKey ? 30 : 10
+              const directions: Record<string, Point> = {
+                ArrowLeft: { x: -step, y: 0 }, ArrowRight: { x: step, y: 0 },
+                ArrowUp: { x: 0, y: -step }, ArrowDown: { x: 0, y: step }
+              }
+              const delta = directions[event.key]
+              if (!delta) return
+              event.preventDefault()
+              setSidebarPosition((current) => ({
+                x: Math.max(8, Math.min(window.innerWidth - (sidebarCollapsed ? 84 : 256), current.x + delta.x)),
+                y: Math.max(8, Math.min(window.innerHeight - 80, current.y + delta.y))
+              }))
+            }}
+          >
+            <span className="drag-grip" aria-hidden="true">⠿</span>
+            {!sidebarCollapsed && <><span>MOVE PANEL</span><span className="drag-hint">DRAG</span></>}
+          </button>
+          <button className="sidebar-collapse" type="button" onClick={toggleSidebar} aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            {sidebarCollapsed ? '›' : '‹'}
+          </button>
         </div>
-        <div className="sidebar-divider" />
-        <div className="sidebar-status">
-          <span className={`status-indicator ${statusTone}`} />
-          <div><small>Vortex status</small><strong>{statusLabel}</strong></div>
-        </div>
-        <div className="sidebar-footer">This app does not set an FPS cap or change Vortex’s internal graphics settings.</div>
+        {!sidebarCollapsed ? (
+          <>
+            <div className="brand-block">
+              <div className="brand-badge">V</div>
+              <div><p className="eyebrow">Desktop companion</p><h1>PlayVortex</h1></div>
+            </div>
+            <div className="sidebar-divider" />
+            <div className="sidebar-status">
+              <span className={`status-indicator ${statusTone}`} />
+              <div><small>Vortex status</small><strong>{statusLabel}</strong></div>
+            </div>
+            <div className="sidebar-footer">This app does not set an FPS cap or change Vortex’s internal graphics settings.</div>
+          </>
+        ) : (
+          <div className="collapsed-status" title={`Vortex: ${statusLabel}`}>
+            <span className={`status-indicator ${statusTone}`} />
+            <span>{status?.running ? 'ON' : 'V'}</span>
+          </div>
+        )}
       </aside>
 
       <main className="main-panel">
